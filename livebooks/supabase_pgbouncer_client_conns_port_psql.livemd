@@ -1,0 +1,166 @@
+# pgbouncer Connected Clients
+
+## Install Deps
+
+```elixir
+Mix.install([
+  {:nimble_csv, "~> 1.1"},
+  {:vega_lite, "~> 0.1.3"},
+  {:kino, "~> 0.5.0"}
+])
+```
+
+## Input Supabase Credentials
+
+```elixir
+project_ref = Kino.Input.text("Supabase Project Ref")
+```
+
+Your `pgbouncer` password is different from your `postgres` user password. PgBouncer creates a special admin database to run commands through. We must connect to the `pgbouncer` database as the `pgbouncer` user to run PgBouncer commands.
+
+To get your `pgbouncer` password please contact Supabase support. Support must run `supa-admin-cli keys -p PROJECT_REF` to lookup the `pgbouncer` user password.
+
+```elixir
+pgbouncer_pass = Kino.Input.text("pgbouncer User Password")
+```
+
+## Poll Connected Clients
+
+```elixir
+defmodule Poller do
+  alias NimbleCSV.RFC4180, as: CSV
+
+  use GenServer
+
+  def start_link(args) when is_list(args) do
+    GenServer.start_link(__MODULE__, args)
+  end
+
+  def init(args) do
+    defaults = %{project_ref: "", pgbouncer_pass: ""}
+
+    opts = Enum.into(args, defaults)
+
+    stack = %{data: []} |> Map.merge(opts)
+
+    poll()
+
+    {:ok, stack}
+  end
+
+  def latest(pid) do
+    GenServer.call(pid, :latest)
+  end
+
+  def handle_call(:latest, _from, %{data: data} = stack) do
+    latest =
+      case Enum.at(data, 0) do
+        nil -> %{}
+        latest -> latest
+      end
+
+    {:reply, {:ok, latest}, stack}
+  end
+
+  def handle_info(:poll, %{project_ref: ref, pgbouncer_pass: pass} = stack) do
+    Port.open({:spawn_executable, "/usr/bin/psql"}, [
+      :binary,
+      args: [
+        "postgresql://pgbouncer:#{pass}@db.#{ref}.supabase.co:6543/pgbouncer",
+        "--csv",
+        "-c",
+        "show pools"
+      ]
+    ])
+
+    poll()
+
+    {:noreply, stack}
+  end
+
+  def handle_info({_from, {:data, csv}}, %{data: data} = stack) do
+    parsed =
+      csv
+      |> CSV.parse_string()
+      |> Enum.map(fn [
+                       database,
+                       user,
+                       cl_active,
+                       cl_waiting,
+                       cl_cancel_req,
+                       sv_active,
+                       sv_idle,
+                       sv_used,
+                       sv_tested,
+                       sv_login,
+                       maxwait,
+                       maxwait_us,
+                       pool_mode
+                     ] ->
+        %{
+          database: database,
+          user: user,
+          cl_active: cl_active,
+          cl_waiting: cl_waiting,
+          cl_cancel_req: cl_cancel_req,
+          sv_active: sv_active,
+          sv_idle: sv_idle,
+          sv_used: sv_used,
+          sv_tested: sv_tested,
+          sv_login: sv_login,
+          maxwait: maxwait,
+          maxwait_us: maxwait_us,
+          pool_mode: pool_mode
+        }
+      end)
+
+    stack = stack |> Map.put(:data, [parsed | data])
+
+    {:noreply, stack}
+  end
+
+  defp poll() do
+    Process.send_after(self(), :poll, 5_000)
+  end
+end
+
+{:ok, pid} =
+  Poller.start_link(
+    project_ref: Kino.Input.read(project_ref),
+    pgbouncer_pass: Kino.Input.read(pgbouncer_pass)
+  )
+```
+
+## Chart Connected Clients
+
+```elixir
+alias VegaLite, as: Vl
+
+widget =
+  Vl.new(width: 800, height: 400)
+  |> Vl.mark(:line)
+  |> Vl.encode_field(:x, "x",
+    time_unit: :monthdatehoursminutesseconds,
+    type: :temporal,
+    title: "Time"
+  )
+  |> Vl.encode_field(:y, "y", type: :quantitative, title: "Connected Clients")
+  |> Kino.VegaLite.new()
+  |> Kino.render()
+
+Kino.animate(1_000, 0, fn i ->
+  {:ok, latest} = Poller.latest(pid)
+
+  pg_user = Enum.find(latest, fn x -> x.user == "postgres" end)
+
+  clients = if pg_user, do: pg_user.cl_active, else: nil
+
+  now = DateTime.utc_now() |> DateTime.to_unix(:millisecond)
+
+  point = %{x: now, y: clients}
+
+  chart = Kino.VegaLite.push(widget, point, window: 1_000)
+
+  {:cont, chart, i + 1}
+end)
+```
