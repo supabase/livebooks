@@ -17,3 +17,7 @@ To get started using this with your own Supabase deployment clone this repo and:
 `supabase_pgbouncer_client_conns_port_psql.livemd` 
 
 - Polls the current clients connected to PgBouncer and charts that metric over time.
+
+`prom_poller.livemd`
+
+- Polls a project Prometheus compatible endpoint and graphs the metric of choice.
