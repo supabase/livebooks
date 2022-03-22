@@ -156,7 +156,7 @@ end
 * `gotrue_up`
 * `promhttp_metric_handler_requests_in_flight`
 * `auth_users_user_count`
-* `pg_stat_statements_total_queries`
+* `supabase_usage_metrics_user_queries_total`
 
 ```elixir
 metric_label = Kino.Input.text("Metric Label")
