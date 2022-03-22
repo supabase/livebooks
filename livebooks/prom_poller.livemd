@@ -24,7 +24,7 @@ project_ref = Kino.Input.text("Supabase Project Ref")
 bearer = Kino.Input.text("Supabase Project Service Role Key")
 ```
 
-## Prometheus Endpoint Request
+## Define Prometheus Endpoint Request
 
 ```elixir
 defmodule Prom do
@@ -71,19 +71,50 @@ defmodule Poller do
     {:ok, stack}
   end
 
-  def get_random_metric(pid) do
+  def get_random_metric(pid) when is_pid(pid) do
     GenServer.call(pid, :get_rand_metric)
   end
 
-  def get_metric(pid, metric_label) do
-    GenServer.call(pid, {:get_metric, metric_label})
+  def get_metric(pid, label) when is_pid(pid) and is_binary(label) do
+    GenServer.call(pid, {:get_metric, label})
   end
 
-  def handle_call({:get_metric, metric_name}, _from, %{data: data} = stack) do
-    metric =
-      Enum.find(data, %{}, fn %PrometheusParser.Line{label: label} -> label == metric_name end)
+  def get_metric(pid, label, {"", ""}) when is_pid(pid) and is_binary(label) do
+    GenServer.call(pid, {:get_metric, label})
+  end
 
-    {:reply, {:ok, metric}, stack}
+  def get_metric(pid, label, tag) when is_pid(pid) and is_binary(label) and is_tuple(tag) do
+    GenServer.call(pid, {:get_metric, label, tag})
+  end
+
+  def handle_call({:get_metric, label}, _from, %{data: data} = stack) do
+    metric = Enum.find(data, %{}, fn %PrometheusParser.Line{label: l} -> l == label end)
+
+    response =
+      case metric do
+        %PrometheusParser.Line{} -> {:ok, metric}
+        %{} -> {:error, :metric_not_found}
+      end
+
+    {:reply, response, stack}
+  end
+
+  def handle_call({:get_metric, label, tag}, _from, %{data: data} = stack) do
+    metric =
+      Enum.find(data, %{}, fn %PrometheusParser.Line{label: l, pairs: tags} ->
+        label_match = l == label
+        tag_match = Enum.any?(tags, fn x -> x == tag end)
+
+        if label_match and tag_match, do: true, else: false
+      end)
+
+    response =
+      case metric do
+        %PrometheusParser.Line{} -> {:ok, metric}
+        %{} -> {:error, :metric_not_found}
+      end
+
+    {:reply, response, stack}
   end
 
   def handle_call(:get_rand_metric, _from, %{data: data} = stack) do
@@ -113,13 +144,66 @@ end
   )
 ```
 
+## Graph a Metric
+
 ### Interesting Metrics
 
 * `node_scrape_collector_duration_seconds`
 * `replication_realtime_lag_bytes`
-* `node_cpu_seconds_total`
+* `node_cpu_seconds_total` 
+  * `mode:user`
 * `go_memstats_frees_total`
+* `gotrue_up`
+* `promhttp_metric_handler_requests_in_flight`
+* `auth_users_user_count`
+* `pg_stat_statements_total_queries`
 
 ```elixir
-Poller.get_random_metric(pid)
+metric_label = Kino.Input.text("Metric Label")
+```
+
+```elixir
+tag_key = Kino.Input.text("Metric Tag Key")
+```
+
+```elixir
+tag_value = Kino.Input.text("Metric Tag Value")
+```
+
+```elixir
+label = Kino.Input.read(metric_label)
+tag_key = Kino.Input.read(tag_key)
+tag_value = Kino.Input.read(tag_value)
+
+Poller.get_metric(pid, label, {tag_key, tag_value})
+```
+
+```elixir
+alias VegaLite, as: Vl
+
+label = Kino.Input.read(metric_label)
+
+widget =
+  Vl.new(width: 750, height: 400)
+  |> Vl.mark(:line)
+  |> Vl.encode_field(:x, "x",
+    time_unit: :monthdatehoursminutesseconds,
+    type: :temporal,
+    title: "Time"
+  )
+  |> Vl.encode_field(:y, "y", type: :quantitative, title: label <> " #{tag_key}:#{tag_value}")
+  |> Kino.VegaLite.new()
+  |> Kino.render()
+
+Kino.animate(1_000, 0, fn i ->
+  {:ok, metric} = Poller.get_metric(pid, label)
+
+  now = DateTime.utc_now() |> DateTime.to_unix(:millisecond)
+
+  point = %{x: now, y: metric.value}
+
+  chart = Kino.VegaLite.push(widget, point, window: 1_000)
+
+  {:cont, chart, i + 1}
+end)
 ```
