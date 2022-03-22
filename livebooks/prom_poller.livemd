@@ -4,7 +4,6 @@
 
 ```elixir
 Mix.install([
-  {:nimble_csv, "~> 1.1"},
   {:vega_lite, "~> 0.1.3"},
   {:kino, "~> 0.5.0"},
   {:tesla, "~> 1.4"},
@@ -15,7 +14,7 @@ Mix.install([
 ])
 ```
 
-## Forms
+## Input
 
 ```elixir
 project_ref = Kino.Input.text("Supabase Project Ref")
@@ -25,29 +24,102 @@ project_ref = Kino.Input.text("Supabase Project Ref")
 bearer = Kino.Input.text("Supabase Project Service Role Key")
 ```
 
+## Prometheus Endpoint Request
+
+```elixir
+defmodule Prom do
+  def do_request(project_ref, bearer) when is_binary(bearer) and is_binary(project_ref) do
+    middleware = [
+      {Tesla.Middleware.BaseUrl, "https://#{project_ref}.supabase.co"},
+      {Tesla.Middleware.Headers, [{"authorization", "Bearer " <> bearer}, {"apiKey", bearer}]}
+    ]
+
+    {:ok, response} =
+      middleware
+      |> Tesla.client()
+      |> Tesla.get("/admin/v1/privileged/project-metrics")
+
+    String.split(response.body, "\n")
+    |> Enum.map(&PrometheusParser.parse(&1))
+    |> Enum.reject(fn
+      {:error, _y} -> true
+      {:ok, %{value: nil}} -> true
+      {:ok, _y} -> false
+    end)
+    |> Enum.map(fn {_x, y} -> y end)
+  end
+end
+```
+
 ## Poll the Prometheus Endpoint
 
 ```elixir
-key = Kino.Input.read(bearer)
-ref = Kino.Input.read(project_ref)
+defmodule Poller do
+  use GenServer
 
-middleware = [
-  {Tesla.Middleware.BaseUrl, "https://#{ref}.supabase.co"},
-  {Tesla.Middleware.Headers, [{"authorization", "Bearer " <> key}, {"apiKey", key}]}
-]
+  def start_link(args) when is_list(args) do
+    GenServer.start_link(__MODULE__, args)
+  end
 
-{:ok, response} =
-  middleware
-  |> Tesla.client()
-  |> Tesla.get("/admin/v1/privileged/project-metrics")
+  def init(args) do
+    defaults = %{project_ref: "", bearer: ""}
+    opts = Enum.into(args, defaults)
+    stack = %{data: []} |> Map.merge(opts)
 
-metrics =
-  String.split(response.body, "\n")
-  |> Enum.map(&PrometheusParser.parse(&1))
-  |> Enum.reject(fn
-    {:error, _y} -> true
-    {:ok, %{value: nil}} -> true
-    {:ok, _y} -> false
-  end)
-  |> Enum.map(fn {_x, y} -> y end)
+    poll()
+
+    {:ok, stack}
+  end
+
+  def get_random_metric(pid) do
+    GenServer.call(pid, :get_rand_metric)
+  end
+
+  def get_metric(pid, metric_label) do
+    GenServer.call(pid, {:get_metric, metric_label})
+  end
+
+  def handle_call({:get_metric, metric_name}, _from, %{data: data} = stack) do
+    metric =
+      Enum.find(data, %{}, fn %PrometheusParser.Line{label: label} -> label == metric_name end)
+
+    {:reply, {:ok, metric}, stack}
+  end
+
+  def handle_call(:get_rand_metric, _from, %{data: data} = stack) do
+    metric = Enum.random(data)
+
+    {:reply, {:ok, metric}, stack}
+  end
+
+  def handle_info(:poll, %{project_ref: ref, bearer: bearer} = stack) do
+    metrics = Prom.do_request(ref, bearer)
+    stack = stack |> Map.put(:data, metrics)
+
+    poll()
+
+    {:noreply, stack}
+  end
+
+  defp poll() do
+    Process.send_after(self(), :poll, 5_000)
+  end
+end
+
+{:ok, pid} =
+  Poller.start_link(
+    project_ref: Kino.Input.read(project_ref),
+    bearer: Kino.Input.read(bearer)
+  )
+```
+
+### Interesting Metrics
+
+* `node_scrape_collector_duration_seconds`
+* `replication_realtime_lag_bytes`
+* `node_cpu_seconds_total`
+* `go_memstats_frees_total`
+
+```elixir
+Poller.get_random_metric(pid)
 ```
