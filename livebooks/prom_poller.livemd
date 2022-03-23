@@ -66,6 +66,9 @@ defmodule Poller do
     opts = Enum.into(args, defaults)
     stack = %{data: []} |> Map.merge(opts)
 
+    if opts.project_ref == "" || opts.bearer == "",
+      do: raise(ArgumentError, message: "`project_ref` and `bearer` required")
+
     poll()
 
     {:ok, stack}
