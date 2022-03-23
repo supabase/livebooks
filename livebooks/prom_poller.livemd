@@ -43,7 +43,6 @@ defmodule Prom do
     |> Enum.map(&PrometheusParser.parse(&1))
     |> Enum.reject(fn
       {:error, _y} -> true
-      {:ok, %{value: nil}} -> true
       {:ok, _y} -> false
     end)
     |> Enum.map(fn {_x, y} -> y end)
@@ -69,9 +68,13 @@ defmodule Poller do
     if opts.project_ref == "" || opts.bearer == "",
       do: raise(ArgumentError, message: "`project_ref` and `bearer` required")
 
-    poll()
+    poll(0)
 
     {:ok, stack}
+  end
+
+  def get_all_metrics(pid) when is_pid(pid) do
+    GenServer.call(pid, :get_all_metrics)
   end
 
   def get_random_metric(pid) when is_pid(pid) do
@@ -88,6 +91,10 @@ defmodule Poller do
 
   def get_metric(pid, label, tag) when is_pid(pid) and is_binary(label) and is_tuple(tag) do
     GenServer.call(pid, {:get_metric, label, tag})
+  end
+
+  def handle_call(:get_all_metrics, _from, %{data: data} = stack) do
+    {:reply, {:ok, data}, stack}
   end
 
   def handle_call({:get_metric, label}, _from, %{data: data} = stack) do
@@ -135,8 +142,8 @@ defmodule Poller do
     {:noreply, stack}
   end
 
-  defp poll() do
-    Process.send_after(self(), :poll, 5_000)
+  defp poll(interval \\ 5_000) do
+    Process.send_after(self(), :poll, interval)
   end
 end
 
@@ -145,6 +152,14 @@ end
     project_ref: Kino.Input.read(project_ref),
     bearer: Kino.Input.read(bearer)
   )
+```
+
+## Browse Metrics
+
+```elixir
+{:ok, data} = Poller.get_all_metrics(pid)
+
+Kino.DataTable.new(data)
 ```
 
 ## Graph a Metric
