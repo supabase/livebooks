@@ -98,7 +98,12 @@ defmodule Poller do
   end
 
   def handle_call({:get_metric, label}, _from, %{data: data} = stack) do
-    metric = Enum.find(data, %{}, fn %PrometheusParser.Line{label: l} -> l == label end)
+    metric =
+      data
+      |> Enum.filter(&(&1.line_type == "ENTRY"))
+      |> Enum.find(%{}, fn %PrometheusParser.Line{label: l} ->
+        l == label
+      end)
 
     response =
       case metric do
@@ -157,7 +162,17 @@ end
 ## Browse Metrics
 
 ```elixir
+filter = Kino.Input.text("Filter Metrics by Label")
+```
+
+```elixir
 {:ok, data} = Poller.get_all_metrics(pid)
+
+data =
+  case Kino.Input.read(filter) do
+    "" -> data
+    filter -> Enum.filter(data, &String.contains?(inspect(&1.label), filter))
+  end
 
 Kino.DataTable.new(data)
 ```
