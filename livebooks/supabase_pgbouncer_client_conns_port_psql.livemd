@@ -18,7 +18,7 @@ project_ref = Kino.Input.text("Supabase Project Ref")
 
 Your `pgbouncer` password is different from your `postgres` user password. PgBouncer creates a special admin database to run commands through. We must connect to the `pgbouncer` database as the `pgbouncer` user to run PgBouncer commands.
 
-To get your `pgbouncer` password please contact Supabase support. Support must run `supa-admin-cli keys -p PROJECT_REF` to lookup the `pgbouncer` user password.
+To get your `pgbouncer` password please contact Supabase support.
 
 ```elixir
 pgbouncer_pass = Kino.Input.text("pgbouncer User Password")
