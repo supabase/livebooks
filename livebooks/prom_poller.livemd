@@ -1,3 +1,5 @@
+<!-- vim: set syntax=markdown: -->
+
 # Prom Poller
 
 ## Deps
