@@ -25,7 +25,7 @@ defmodule Logflare.PhxClient do
 
   alias PhoenixClient.{Socket, Channel, Message}
 
-  @url "ws://localhost:4000/logs/websocket"
+  @url "wss://api.logflare.app/logs/websocket"
 
   def start_link(opts) do
     opts = [{:base_url, @url} | opts]
