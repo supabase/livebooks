@@ -19,3 +19,9 @@ To get started using this with your own Supabase deployment clone this repo and:
 - Polls a project Prometheus compatible endpoint and graphs the metric of choice.
 
 [![Run in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https%3A%2F%2Fgithub.com%2Fsupabase%2Flivebooks%2Fblob%2Fmain%2Flivebooks%2Fprom_poller.livemd)
+
+`logflare_websocket_ingest.livemd`
+
+- Send logs to Logflare via websockets!
+
+[![Run in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https%3A%2F%2Fgithub.com%2Fsupabase%2Flivebooks%2Fblob%2Fmain%2Flivebooks%2Flogflare_websocket_ingest.livemd)
