@@ -28,6 +28,6 @@ To get started using this with your own Supabase deployment clone this repo and:
 
 `query_postgres.livemd`
 
-- Send logs to Logflare via websockets!
+- Query Postgres easily!
 
 [![Run in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https%3A%2F%2Fgithub.com%2Fsupabase%2Flivebooks%2Fblob%2Fmain%2Flivebooks%2Fquery_postgres.livemd)
