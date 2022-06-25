@@ -1,0 +1,36 @@
+# Query Postgres
+
+```elixir
+Mix.install([
+  {:kino_db, "~> 0.1.1"},
+  {:postgrex, "~> 0.16.3"}
+])
+```
+
+## Section
+
+<!-- livebook:{"attrs":{"database":"postgres","hostname":"","password":"","port":5432,"type":"postgres","username":"postgres","variable":"conn"},"kind":"Elixir.KinoDB.ConnectionCell","livebook_object":"smart_cell"} -->
+
+```elixir
+opts = [
+  hostname: "",
+  port: 5432,
+  username: "postgres",
+  password: "",
+  database: "postgres"
+]
+
+{:ok, conn} = Kino.start_child({Postgrex, opts})
+```
+
+```elixir
+unless Process.info(conn),
+  do: IO.puts("Couldn't connect to Postgres. Check your connection details."),
+  else: IO.puts("Connected!")
+```
+
+<!-- livebook:{"attrs":{"connection":{"type":"postgres","variable":"conn"},"query":"select * from table limit 100","result_variable":"result2","timeout":null},"kind":"Elixir.KinoDB.SQLCell","livebook_object":"smart_cell"} -->
+
+```elixir
+result2 = Postgrex.query!(conn, "select * from buyers limit 100", [])
+```
