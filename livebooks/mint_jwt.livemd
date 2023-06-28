@@ -1,0 +1,55 @@
+# Mint a JWT
+
+```elixir
+Mix.install([
+  {:joken, "~> 2.6"},
+  {:jason, "~> 1.4"},
+  {:kino, "~> 0.9.4"}
+])
+```
+
+## Section
+
+```elixir
+secret =
+  Kino.Input.text("Secret", default: "super-secret-jwt-token-with-at-least-32-characters-long")
+```
+
+```elixir
+example =
+  %{
+    "aud" => "authenticated",
+    "email" => "dianne@diary.com",
+    "role" => "authenticated",
+    "sub" => "eec83dcf-2ec7-444a-a02d-32d2e022234b",
+    "exp" => 1_908_503_425,
+    "app_metadata" => %{},
+    "user_metadata" => %{"id" => 1}
+  }
+  |> Jason.encode!()
+
+claims = Kino.Input.text("Claims", default: example)
+```
+
+```elixir
+supabase_secret = Kino.Input.read(secret)
+
+# empty config
+token_config = %{}
+
+# fancy validation
+# token_config =
+#   Map.put(token_config, "scope", %Joken.Claim{
+#     generate: fn -> "user" end,
+#     validate: fn val, _claims, _context -> val in ["user", "admin"] end
+#   })
+
+signer = Joken.Signer.create("HS256", supabase_secret)
+
+claims = Kino.Input.read(claims) |> Jason.decode!()
+
+{:ok, claims} = Joken.generate_claims(token_config, claims)
+{:ok, jwt, claims} = Joken.encode_and_sign(claims, signer)
+
+IO.puts(jwt)
+```
