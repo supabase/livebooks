@@ -1,0 +1,77 @@
+# Supavisor Demo
+
+```elixir
+Mix.install([
+  {:postgrex, "~> 0.16.3"},
+  {:kino, "~> 0.10.0"}
+])
+```
+
+## Some more setup
+
+```elixir
+child = {DynamicSupervisor, strategy: :one_for_one, name: SvDemo.DynamicSupervisor}
+
+{:ok, _pid} = Kino.start_child(child)
+```
+
+## Configure our connection
+
+```elixir
+# :ssl.start()
+
+# sni_host = "db.ybkqkhkptkgmnlqjwtta.supabase.co"
+
+pass = System.fetch_env!("LB_SUPAVISOR_DEMO_PASS")
+
+# Supavisor
+opts = [
+  hostname: "aws-0-us-west-1.pooler.supabase.com",
+  port: 6543,
+  # Include your project ref in the username
+  username: "postgres.ybkqkhkptkgmnlqjwtta",
+  password: pass,
+  database: "postgres"
+  # ssl: true,
+  # ssl_opts: [
+  #   verify: :verify_none,
+  #   server_name_indication: to_charlist(sni_host)
+  # ]
+  # socket_options: [:inet6]
+]
+
+connections = 50
+```
+
+```elixir
+pool =
+  for _c <- 1..connections do
+    {:ok, _conn} = DynamicSupervisor.start_child(SvDemo.DynamicSupervisor, {Postgrex, opts})
+  end
+
+DynamicSupervisor.count_children(SvDemo.DynamicSupervisor)
+```
+
+```elixir
+{:ok, conn} = Enum.random(pool)
+
+Postgrex.query(conn, "select 1 as one", [])
+```
+
+```elixir
+Postgrex.query(
+  conn,
+  "select count(*) from pg_stat_activity where application_name = 'supavisor'",
+  []
+)
+```
+
+```elixir
+for {:ok, conn} <- pool do
+  Postgrex.query(
+    conn,
+    "select 1 as one",
+    []
+  )
+end
+```
