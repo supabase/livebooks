@@ -1,4 +1,4 @@
-FROM livebook/livebook:0.6.1
+FROM ghcr.io/livebook-dev/livebook:0.10.0
 
 # Install curl
 RUN apt-get update && \
