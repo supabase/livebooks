@@ -43,3 +43,8 @@ To get started using this with your own Supabase deployment clone this repo and:
 
 - Demo of the Supavisor connection pooler.
 - [Run in Livebook](https://livebook.dev/run?url=https%3A%2F%2Fgithub.com%2Fsupabase%2Flivebooks%2Fblob%2Fmain%2Flivebooks%2Fsupavisor_demo.livemd)
+
+`supavisor_qa.livemd`
+
+- QA Supavisor.
+- [Run in Livebook](https://livebook.dev/run?url=https%3A%2F%2Fgithub.com%2Fsupabase%2Flivebooks%2Fblob%2Fmain%2Flivebooks%2Fsupavisor_qa.livemd)

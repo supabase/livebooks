@@ -1,0 +1,214 @@
+# Supavisor QA
+
+```elixir
+Mix.install([
+  {:postgrex, "~> 0.16.3"},
+  {:kino, "~> 0.10.0"}
+])
+```
+
+## Some more setup
+
+```elixir
+child = {DynamicSupervisor, strategy: :one_for_one, name: SvDemo.DynamicSupervisor}
+
+{:ok, _pid} = Kino.start_child(child)
+```
+
+## Configure our connection
+
+```elixir
+# :ssl.start()
+
+# sni_host = "db.ybkqkhkptkgmnlqjwtta.supabase.co"
+
+pass = System.fetch_env!("LB_SUPAVISOR_DEMO_PASS")
+project = "ybkqkhkptkgmnlqjwtta"
+pooler_hostname = "aws-0-us-west-1.pooler.supabase.com"
+
+# Supavisor Transaction Mode
+supa_opts = [
+  hostname: pooler_hostname,
+  port: 6543,
+  # Include your project ref in the username
+  username: "postgres.#{project}",
+  password: pass,
+  database: "postgres"
+  # ssl: true,
+  # ssl_opts: [
+  #   verify: :verify_none,
+  #   server_name_indication: to_charlist(sni_host)
+  # ]
+  # socket_options: [:inet6]
+]
+
+# PgBouncer
+pgbouncer_opts = [
+  hostname: "db.#{project}.supabase.co",
+  port: 6543,
+  # Include your project ref in the username
+  username: "postgres",
+  password: pass,
+  database: "postgres"
+  # ssl: true,
+  # ssl_opts: [
+  #   verify: :verify_none,
+  #   server_name_indication: to_charlist(sni_host)
+  # ]
+  # socket_options: [:inet6]
+]
+
+# Direct
+direct_opts = [
+  hostname: "db.#{project}.supabase.co",
+  port: 5432,
+  # Include your project ref in the username
+  username: "postgres",
+  password: pass,
+  database: "postgres"
+  # ssl: true,
+  # ssl_opts: [
+  #   verify: :verify_none,
+  #   server_name_indication: to_charlist(sni_host)
+  # ]
+  # socket_options: [:inet6]
+]
+
+# Supavisor Session Mode
+session_opts = [
+  hostname: pooler_hostname,
+  port: 5432,
+  # Include your project ref in the username
+  username: "postgres.ybkqkhkptkgmnlqjwtta",
+  password: pass,
+  database: "postgres"
+  # ssl: true,
+  # ssl_opts: [
+  #   verify: :verify_none,
+  #   server_name_indication: to_charlist(sni_host)
+  # ]
+  # socket_options: [:inet6]
+]
+
+connections = 200
+```
+
+```elixir
+opts = supa_opts
+
+pool_times =
+  for _c <- 1..connections do
+    :timer.tc(DynamicSupervisor, :start_child, [
+      SvDemo.DynamicSupervisor,
+      {Postgrex, opts}
+    ])
+  end
+
+pool = Enum.map(pool_times, fn {_latency, response} -> response end)
+times = Enum.map(pool_times, fn {latency, _response} -> latency end)
+
+times
+|> Enum.sum()
+|> Kernel./(connections)
+|> Kernel./(1_000)
+|> Float.floor(2)
+|> Float.to_string()
+|> Kernel.<>(" ms avg per new connection")
+```
+
+## Count our connections
+
+```elixir
+DynamicSupervisor.count_children(SvDemo.DynamicSupervisor)
+```
+
+## Count connection from pg_stat_activity
+
+```elixir
+{:ok, conn} = Enum.random(pool)
+
+Postgrex.query(
+  conn,
+  "select count(*) from pg_stat_activity where application_name ilike '%Supavisor%'",
+  []
+)
+```
+
+## Try a random connection
+
+```elixir
+Postgrex.query(conn, "select 1 as one", [])
+```
+
+## Create a test table
+
+```elixir
+query = """
+CREATE TABLE if not exists diary_entries (
+  id SERIAL PRIMARY KEY,
+  body TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  user_id INTEGER,
+  tag TEXT
+)
+"""
+
+Postgrex.query(conn, query, [])
+```
+
+## Do queries
+
+```elixir
+defmodule Query do
+  def do_query(conn) do
+    insert_query = """
+    INSERT INTO diary_entries (body, tag, user_id)
+    values ('entry one', 'school', $1);
+    """
+
+    :timer.tc(Postgrex, :query, [conn, insert_query, [Enum.random(1..10)]])
+  end
+
+  def process_response(responses) do
+    connections = Enum.count(responses)
+
+    responses
+    |> Enum.map(fn {time, _response} -> time end)
+    |> Enum.sum()
+    |> Kernel./(connections)
+    |> Kernel./(1_000)
+    |> Float.floor(2)
+    |> Float.to_string()
+    |> Kernel.<>(" ms avg per query")
+  end
+end
+
+responses =
+  for {:ok, pid} <- pool do
+    task = fn ->
+      for _i <- 1..10 do
+        Query.do_query(pid)
+      end
+    end
+
+    Task.async(task)
+  end
+  |> List.flatten()
+  |> Task.await_many(300_000)
+  |> List.flatten()
+
+IO.puts("#{Enum.count(responses)} requests")
+
+Query.process_response(responses)
+```
+
+## Clean up
+
+```elixir
+query = """
+truncate diary_entries
+"""
+
+Postgrex.query(conn, query, [])
+```
