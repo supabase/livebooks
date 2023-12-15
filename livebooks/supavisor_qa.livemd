@@ -23,7 +23,7 @@ child = {DynamicSupervisor, strategy: :one_for_one, name: SvDemo.DynamicSupervis
 # sni_host = "db.ybkqkhkptkgmnlqjwtta.supabase.co"
 
 pass = System.fetch_env!("LB_SUPAVISOR_DEMO_PASS")
-project = "dbbgqnolttkpswcogaxo"
+project = "ybkqkhkptkgmnlqjwtta"
 pooler_hostname = "aws-0-us-west-1.pooler.supabase.com"
 
 # Supavisor Transaction Mode
@@ -140,6 +140,23 @@ Postgrex.query(
 Postgrex.query(conn, "select 1 as one", [])
 ```
 
+## Create a test table
+
+```elixir
+query = """
+CREATE TABLE if not exists diary_entries (
+  id SERIAL PRIMARY KEY,
+  body TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  user_id INTEGER,
+  tag TEXT
+)
+"""
+
+Postgrex.query(conn, query, [])
+```
+
 ## Do queries
 
 ```elixir
@@ -170,7 +187,7 @@ end
 responses =
   for {:ok, pid} <- pool do
     task = fn ->
-      for _i <- 1..500 do
+      for _i <- 1..10 do
         Query.do_query(pid)
       end
     end
@@ -184,23 +201,6 @@ responses =
 IO.puts("#{Enum.count(responses)} requests")
 
 Query.process_response(responses)
-```
-
-## Create a test table
-
-```elixir
-query = """
-CREATE TABLE if not exists diary_entries (
-  id SERIAL PRIMARY KEY,
-  body TEXT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  user_id INTEGER,
-  tag TEXT
-)
-"""
-
-Postgrex.query(conn, query, [])
 ```
 
 ## Clean up
