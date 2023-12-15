@@ -38,3 +38,8 @@ To get started using this with your own Supabase deployment clone this repo and:
 
 - Subscribe to the Postgres write-ahead log and send records to Logflare.
 - [Run in Livebook](https://livebook.dev/run?url=https%3A%2F%2Fgithub.com%2Fsupabase%2Flivebooks%2Fblob%2Fmain%2Flivebooks%2Fpostgres_wal_to_logflare.livemd)
+
+`supavisor_qa.livemd`
+
+- QA supavisor.
+- [Run in Livebook](https://livebook.dev/run?url=https%3A%2F%2Fgithub.com%2Fsupabase%2Flivebooks%2Fblob%2Fmain%2Flivebooks%2Fsupavisor_qa.livemd)
