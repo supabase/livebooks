@@ -129,7 +129,7 @@ DynamicSupervisor.count_children(SvDemo.DynamicSupervisor)
 
 Postgrex.query(
   conn,
-  "select count(*) from pg_stat_activity where application_name = 'supavisor'",
+  "select count(*) from pg_stat_activity where application_name ilike '%Supavisor%'",
   []
 )
 ```
